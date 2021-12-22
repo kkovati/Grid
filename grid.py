@@ -273,7 +273,7 @@ class Account:
     def calculate_investment_value(self, price):
         open_trade_sum = 0
         for trade in self.open_trades:
-            open_trade_sum += (price - trade['buy_price']) * trade['qty']
+            open_trade_sum += price * trade['qty']
         return open_trade_sum + self.wallet
 
     def get_wallet(self):
@@ -316,6 +316,7 @@ class MarketSimulator:
                 account.update(price)
                 trader.update(price)
 
+            print(f"last price {price}")
             wallet = account.get_wallet()
             self.trader_params.at[i, 'wallet'] = wallet
 
