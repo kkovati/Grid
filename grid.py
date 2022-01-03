@@ -89,7 +89,7 @@ def get_random_trader_population(n_traders, base_price):
     return trader_params
 
 
-class Trader:
+class GridTrader:
     def __init__(self, account, base_price, step, stop_loss_coef):
         # assert scale in ('lin', 'log')
 
@@ -224,6 +224,43 @@ class Trader:
         pass
 
 
+class LimitTrader:
+    def __init__(self, buy_lim_coef, stop_loss_coef):
+        self.status = "uninitialized"
+
+        self.buy_lim_coef = 1 + buy_lim_coef
+        self.stop_loss_coef = 1 - stop_loss_coef
+
+        self.buy_lim = None
+        self.stop_loss = None
+
+    def update(self, price):
+        if self.status == "uninitialized":
+            self.status = "out_of_trade"
+            self.buy_lim = price * self.buy_lim_coef
+            return "do_nothing"
+        elif self.status == "out_of_trade":
+            self.buy_lim = min(self.buy_lim, price * self.buy_lim_coef)
+            if price >= self.buy_lim:
+                self.status = "in_trade"
+                self.buy_lim = None
+                self.stop_loss = price * self.stop_loss_coef
+                return "buy"
+            else:
+                return "do_nothing"
+        elif self.status == "in_trade":
+            self.stop_loss = max(self.stop_loss, price * self.stop_loss_coef)
+            if price <= self.stop_loss:
+                self.status = "out_of_trade"
+                self.buy_lim = price * self.buy_lim_coef
+                self.stop_loss = None
+                return "sell"
+            else:
+                return "do_nothing"
+        else:
+            raise ValueError
+
+
 class Account:
     def __init__(self):
         self.wallet = 0
@@ -257,6 +294,7 @@ class Account:
 
     def execute_market_sell(self, i, price):
         # limited functionality: sell all (one) open trades
+        # limited functionality: no commission
         assert len(self.open_trades) == 1
         for trade in self.open_trades:
             self.wallet += price * trade['qty']
@@ -293,20 +331,20 @@ class Account:
         return self.wallet_timeline[-1]
 
 
-class TraderHold(Trader):
-    def __init__(self, base_price, scale, step):
-        super().__init__(base_price, scale, step)
-        self.enter_flag = False
-
-    def step_up(self, grid_idx):
-        if not self.enter_flag:
-            self.buy(grid_idx + 1, qty=2)
-            self.enter_flag = True
-
-    def step_down(self, grid_idx):
-        if not self.enter_flag:
-            self.buy(grid_idx + 1, qty=2)
-            self.enter_flag = True
+# class TraderHold(Trader):
+#     def __init__(self, base_price, scale, step):
+#         super().__init__(base_price, scale, step)
+#         self.enter_flag = False
+#
+#     def step_up(self, grid_idx):
+#         if not self.enter_flag:
+#             self.buy(grid_idx + 1, qty=2)
+#             self.enter_flag = True
+#
+#     def step_down(self, grid_idx):
+#         if not self.enter_flag:
+#             self.buy(grid_idx + 1, qty=2)
+#             self.enter_flag = True
 
 
 class MarketSimulator:
@@ -338,7 +376,7 @@ class MarketSimulator:
                 saved_account = account
                 best_wallet = wallet
 
-        plot_results(ts, saved_account, saved_trader, saved_trader.grid)
+        plot_results(interval, saved_account, saved_trader, saved_trader.grid)
 
         print(self.trader_params)
         print(self.trader_params.iloc[self.trader_params['wallet'].argmax()])
@@ -359,7 +397,7 @@ def main():
     df = pd.read_csv('data/BTCUSDT-1m-2021-11.csv')
     ts = df.iloc[:, 4].to_numpy()
 
-    trader_params = get_random_trader_population(n_traders=1000, base_price=45000.01)
+    trader_params = get_random_trader_population(n_traders=200, base_price=45000.01)
 
     me = MarketSimulator(trader_params)
     me.simulate(ts)

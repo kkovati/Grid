@@ -43,7 +43,7 @@ def get_price(client, ticker):
 def buy(client, ticker, side, quantity):
     assert side in ("buy", "sell")
     params = {
-        "symbol": ticker,
+        "symbol": ticker.uppercase(),
         "side": side.uppercase(),
         "type": "MARKET",
         "quantity": quantity
@@ -61,18 +61,43 @@ def buy(client, ticker, side, quantity):
         )
 
 
+def acc_snapshot(client):
+    try:
+        response = client.account_snapshot("SPOT")
+        logging.info(response)
+    except ClientError as error:
+        logging.error(f"Found error. status: {error.status_code}, error code: {error.error_code}, "
+                      f"error message: {error.error_message}")
+
+
+def acc_status(client):
+    response = client.account_status()
+    logging.info(response)
+
+
 def main():
     ticker = "BTCUSDT"
 
-    key = "sW9XjJLxvqDBiFZtQ9m3FDK1iHYTMxIZttQH8AUL9AzYbJoXrvW8dAgUXcsMgrdD"
-    secret = "CuZWeDhZxmk2G6MqOlBC0I6Zo3yAOtBpKZcIgyDmfLibJTN7ww4kcIVWrJIda9mR"
+    # Test
+    # key = "sW9XjJLxvqDBiFZtQ9m3FDK1iHYTMxIZttQH8AUL9AzYbJoXrvW8dAgUXcsMgrdD"
+    # secret = "CuZWeDhZxmk2G6MqOlBC0I6Zo3yAOtBpKZcIgyDmfLibJTN7ww4kcIVWrJIda9mR"
+    # client = Client(key, secret, base_url="https://testnet.binance.vision")
 
-    client = Client(key, secret, base_url="https://testnet.binance.vision")
+    # Live
+    key = "Wh89KrKccEHXs3yYAnELU9bPE3EKMncm5im7HAbB4VmHl6wjpBeiOzzybkJhWcSz"
+    secret = "f8VMgKFdJT1nDoppeGfVwyVkeJpCvOYyZOZsx6orWYmLPpIOWi3osSACSVBp0ZLw"
+    client = Client(key, secret)
 
     while True:
         logging.info("-----------")
-        price = get_price(client, ticker)
+        # price = get_price(client, ticker)
+        acc_snapshot(client)
         time.sleep(2)
+
+
+class BinanceAccountConnector:
+    def __init__(self):
+        pass
 
 
 if __name__ == '__main__':
