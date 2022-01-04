@@ -92,13 +92,14 @@ def get_random_trader_population(n_traders, base_price):
     return trader_params
 
 
-class Account:
+class AccountSimulator:
     def __init__(self):
-        self.wallet = 0
+        self.original_wallet = self.wallet = 1
         self.wallet_timeline = []
         self.open_buy_orders = []
         self.open_trades = []
         self.market_actions = []
+        self.n_buys = 0
 
     def update(self, i, price):
         # self.execute_limit_orders(price)
@@ -112,24 +113,24 @@ class Account:
 
     def execute_market_buy(self, i, price, qty=1, sell_limit=None, stop_loss=None):
         # limited functionality: one open trade at a time
+        # limited functionality: buy with all available money
         assert len(self.open_trades) == 0
-        self.wallet -= price * qty  # value of trade
         # https://www.binance.com/en/fee/trading
-        self.wallet -= price * qty * 0.001 * 2  # buy and trade commission
+        self.wallet *= 1 - (0.001 * 2)  # buy and sell commission combined
         self.open_trades.append({'buy_price': price,
                                  'qty': qty,
                                  'sell_limit': sell_limit,
                                  'stop_loss': stop_loss})
         assert len(self.open_trades) == 1
         self.market_actions.append(i)
+        self.n_buys += 1
         # print(f"buy @ {price:.4}")
 
     def execute_market_sell(self, i, price):
         # limited functionality: sell all (one) open trades
-        # limited functionality: no commission
         assert len(self.open_trades) == 1
         for trade in self.open_trades:
-            self.wallet += price * trade['qty']
+            self.wallet *= price / trade['buy_price']
             self.open_trades.remove(trade)
         assert not self.open_trades  # check if self.open_trades is empty
         self.market_actions.append(i)
@@ -154,11 +155,11 @@ class Account:
                     continue
 
     def calculate_investment_value(self, price):
-        open_trade_sum = 0
         assert len(self.open_trades) <= 1
+        temp_wallet = self.wallet
         for trade in self.open_trades:
-            open_trade_sum += price * trade['qty']
-        return open_trade_sum + self.wallet
+            temp_wallet *= price / trade['buy_price']
+        return temp_wallet
 
     def get_wallet(self):
         return self.wallet_timeline[-1]
@@ -172,7 +173,7 @@ class MarketSimulator:
     def simulate(self, interval):
         best_wallet = -9999
         for i in tqdm(range(len(self.trader_params))):
-            account = Account()
+            account = AccountSimulator()
             single_trader_params = self.trader_params.loc[i]
 
             trader = GridTrader(
