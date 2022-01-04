@@ -50,10 +50,11 @@ def convert_interval_to_timeseries(interval):
     return timeseries
 
 
-def plot_results(interval, account, trader, grid):
+def plot_results(interval, account, trader, grid=None):
     fig, axs = plt.subplots(2)
     # axs[0].set_yticks([0, 50, 100, 150, 200], minor=False)
-    axs[0].set_yticks(grid, minor=True)
+    if grid is not None:
+        axs[0].set_yticks(grid, minor=True)
     # axs[0].yaxis.grid(True, which='major')
     axs[0].yaxis.grid(True, which='minor')
 
@@ -90,138 +91,69 @@ def get_random_trader_population(n_traders, base_price):
 
 
 class GridTrader:
-    def __init__(self, account, base_price, step, stop_loss_coef):
-        # assert scale in ('lin', 'log')
-
-        self.account = account
+    def __init__(self, base_price, step, stop_loss_coef):
+        self.status = "uninitialized"
 
         self.base_price = base_price
-        # self.scale = scale
-        self.step = step
+        self.step = 1 + step
         self.stop_loss_coef = 1 - stop_loss_coef
 
-        self.grid = self.calc_grid(base_price, step)
-        # self.grid_idx = None
-        self.grid_idx_list = []
+        self.curr_lower_grid_value = base_price
+        self.lower_grid_values_timeline = []
 
-        self.stop_loss_price = None  # stop-loss price of the only one open trade
+        self.stop_loss = None  # stop-loss price of the only one open trade
 
-    def update(self, i, price):
-        if not self.grid_idx_list:
-            curr_grid_idx = self.get_grid_idx(price, self.grid)
-            self.grid_idx_list.append(curr_grid_idx)
-            return
+    def update(self, price):
+        self.set_lower_grid_value(price)
 
-        curr_grid_idx = self.get_grid_idx(price, self.grid)
-        if self.grid_idx_list[-1] != curr_grid_idx:
-            self.grid_idx_list.append(curr_grid_idx)
+        if not self.lower_grid_values_timeline:
+            self.lower_grid_values_timeline.append(self.curr_lower_grid_value)
+            return "do_nothing"
 
-        if self.stop_loss_price is not None:
-            # an open trade exists
-            if price <= self.stop_loss_price:
-                # sell
-                self.account.execute_market_sell(i, price)
-                self.stop_loss_price = None
+        if self.lower_grid_values_timeline[-1] != self.curr_lower_grid_value:
+            self.lower_grid_values_timeline.append(self.curr_lower_grid_value)
+
+        if self.status == "uninitialized":
+            self.status = "out_of_trade"
+            return "do_nothing"
+        elif self.status == "out_of_trade":
+            if len(self.lower_grid_values_timeline) < 3:
+                return "do_nothing"
+            elif self.lower_grid_values_timeline[-3] < self.lower_grid_values_timeline[-2] < \
+                    self.lower_grid_values_timeline[-1]:
+
+                self.status = "in_trade"
+                self.stop_loss = price * self.stop_loss_coef
+                return "buy"
             else:
-                # update stop-loss price
-                self.stop_loss_price = max(self.stop_loss_price, price * self.stop_loss_coef)
+                return "do_nothing"
+        elif self.status == "in_trade":
+            self.stop_loss = max(self.stop_loss, price * self.stop_loss_coef)
+            if price <= self.stop_loss:
+                self.status = "out_of_trade"
+                self.stop_loss = None
+                return "sell"
+            else:
+                return "do_nothing"
         else:
-            # no open trade
-            if len(self.grid_idx_list) < 3:
-                return
-            if self.grid_idx_list[-3] < self.grid_idx_list[-2] < self.grid_idx_list[-1]:
-                # buy
-                self.account.execute_market_buy(i, price)
-                self.stop_loss_price = price * self.stop_loss_coef
+            raise ValueError
 
-    def update_old_2(self, price):
-        if self.grid_idx is None:
-            self.grid_idx = self.get_grid_idx(price, self.grid)
-            self.grid_idx_list.append(self.grid_idx)
+    def set_lower_grid_value(self, price):
+        # multiply and divide multiple times with same number gives same results? according to my tests: yes
+        if price < self.curr_lower_grid_value:
+            for _ in range(100):
+                self.curr_lower_grid_value /= self.step
+                if self.curr_lower_grid_value <= price:
+                    return
+            raise Exception('Too large price change compared to grid step size')
+        elif self.curr_lower_grid_value <= price < self.curr_lower_grid_value * self.step:
             return
-
-        curr_grid_idx = self.get_grid_idx(price, self.grid)
-
-        if self.grid_idx_list[-1] != curr_grid_idx:
-            self.grid_idx_list.append(curr_grid_idx)
-
-        if self.check_open_trade_buy_price(curr_grid_idx + 1):
-            pass
         else:
-            buy_order = {'buy_limit': self.grid[curr_grid_idx + 1],
-                         'qty': 1}
-            self.place_buy_order(buy_order)
-
-    def update_old_1(self, curr_grid_idx):
-        if self.grid_idx < curr_grid_idx:
-            self.step_up(curr_grid_idx)
-        elif curr_grid_idx < self.grid_idx:
-            self.step_down(curr_grid_idx)
-        self.grid_idx = curr_grid_idx
-
-    def step_up(self, grid_idx):
-        raise NotImplementedError
-        buy_up = True
-        if buy_up:
-            # buy and increase stop_loss
-            if not self.check_trade_buy_price(grid_idx):
-                self.buy(grid_idx, sell_limit=None, stop_loss=grid_idx - 1)
-            for trade in self.open_trades:
-                trade['stop_loss'] = grid_idx - 1
-
-        buy_dip = False
-        if buy_dip:
-            # sell with sell limit order
-            pass
-
-    def step_down(self, grid_idx):
-        raise NotImplementedError
-        buy_up = True
-        if buy_up:
-            # sell with stop loss order
-            pass
-
-        buy_dip = False
-        if buy_dip:
-            # buy and at step_up() sell one grid higher
-            if not self.check_trade_buy_price(grid_idx):
-                self.buy(grid_idx + 1, sell_limit=grid_idx + 2)
-
-    def calc_grid(self, base_price, step):
-        grid = [base_price]
-        grid_up = base_price
-        grid_down = base_price
-        for i in range(200):  # TODO: major bottleneck
-            grid_up *= (1 + step)
-            grid_down /= (1 + step)
-            grid.append(grid_up)
-            grid.append(grid_down)
-        grid.sort()
-        return grid
-
-    def get_grid_idx(self, price, grid):  # TODO: major bottleneck
-        if price <= grid[0] or grid[-1] <= price:
-            raise Exception('Price is out of grid bounds')
-        for i in range(len(grid)):
-            if price < grid[i]:
-                return i - 1
-        raise Exception('Something went wrong')
-
-    def check_open_buy_order_price(self, grid_idx):
-        raise NotImplementedError
-        for buy_order in self.account.get_open_buy_orders():
-            if isclose(self.grid[grid_idx], buy_order['buy_limit'], rel_tol=0.001):
-                return True
-        return False
-
-    def check_open_trade_buy_price(self, grid_idx):
-        for trade in self.account.get_open_trades():
-            if isclose(self.grid[grid_idx], trade['buy_price'], rel_tol=0.001):
-                return True
-        return False
-
-    def is_open_trade(self):
-        pass
+            for _ in range(100):
+                self.curr_lower_grid_value *= self.step
+                if price < self.curr_lower_grid_value * self.step:
+                    return
+            raise Exception('Too large price change compared to grid step size')
 
 
 class LimitTrader:
@@ -323,28 +255,13 @@ class Account:
 
     def calculate_investment_value(self, price):
         open_trade_sum = 0
+        assert len(self.open_trades) <= 1
         for trade in self.open_trades:
             open_trade_sum += price * trade['qty']
         return open_trade_sum + self.wallet
 
     def get_wallet(self):
         return self.wallet_timeline[-1]
-
-
-# class TraderHold(Trader):
-#     def __init__(self, base_price, scale, step):
-#         super().__init__(base_price, scale, step)
-#         self.enter_flag = False
-#
-#     def step_up(self, grid_idx):
-#         if not self.enter_flag:
-#             self.buy(grid_idx + 1, qty=2)
-#             self.enter_flag = True
-#
-#     def step_down(self, grid_idx):
-#         if not self.enter_flag:
-#             self.buy(grid_idx + 1, qty=2)
-#             self.enter_flag = True
 
 
 class MarketSimulator:
@@ -357,16 +274,25 @@ class MarketSimulator:
         for i in tqdm(range(len(self.trader_params))):
             account = Account()
             single_trader_params = self.trader_params.loc[i]
-            trader = Trader(
-                account=account,
-                base_price=single_trader_params['base_price'],
-                # scale=single_trader_params['scale'],
-                step=single_trader_params['step'],
+
+            # TODO GridTrader instantly opens new order after a sell
+            # trader = GridTrader(
+            #     base_price=single_trader_params['base_price'],
+            #     step=single_trader_params['step'],
+            #     stop_loss_coef=single_trader_params['stop_loss_coef'])
+
+            trader = LimitTrader(
+                buy_lim_coef=single_trader_params['step'],
                 stop_loss_coef=single_trader_params['stop_loss_coef'])
 
             for j, price in enumerate(interval):
                 account.update(j, price)
-                trader.update(j, price)
+                action = trader.update(price)
+                assert action in ("do_nothing", "buy", "sell")
+                if action == "buy":
+                    account.execute_market_buy(j, price)
+                elif action == "sell":
+                    account.execute_market_sell(j, price)
 
             wallet = account.get_wallet()
             self.trader_params.at[i, 'wallet'] = wallet
@@ -376,7 +302,19 @@ class MarketSimulator:
                 saved_account = account
                 best_wallet = wallet
 
-        plot_results(interval, saved_account, saved_trader, saved_trader.grid)
+        # calculate relevant grid
+        # grid = [saved_trader.base_price]
+        # price = saved_trader.base_price
+        # while price < max(interval):
+        #     price *= saved_trader.step
+        #     grid.append(price)
+        # price = saved_trader.base_price
+        # while min(interval) < price:
+        #     price /= saved_trader.step
+        #     grid.append(price)
+
+        # plot_results(interval, saved_account, saved_trader, grid)
+        plot_results(interval, saved_account, saved_trader)
 
         print(self.trader_params)
         print(self.trader_params.iloc[self.trader_params['wallet'].argmax()])
@@ -394,6 +332,9 @@ class MarketSimulator:
 def main():
     # ri = generate_random_interval(200, start_price=100)
     # ts = generate_random_timeseries(10000, start_price=100.01)  # , mu=.00005, sigma=.005)
+
+    # https://data.binance.vision/?prefix=data/spot/monthly/klines/BTCUSDT/1m/
+    # https://github.com/binance/binance-public-data/
     df = pd.read_csv('data/BTCUSDT-1m-2021-11.csv')
     ts = df.iloc[:, 4].to_numpy()
 
