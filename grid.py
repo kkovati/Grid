@@ -7,6 +7,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 from tqdm import tqdm
 
+from traders import GridTrader, LimitTrader
+
 OPEN, HIGH, LOW, CLOSE = 0, 1, 2, 3
 
 
@@ -90,109 +92,6 @@ def get_random_trader_population(n_traders, base_price):
     return trader_params
 
 
-class GridTrader:
-    def __init__(self, base_price, step, stop_loss_coef):
-        self.status = "uninitialized"
-
-        self.base_price = base_price
-        self.step = 1 + step
-        self.stop_loss_coef = 1 - stop_loss_coef
-
-        self.curr_lower_grid_value = base_price
-        self.lower_grid_values_timeline = []
-
-        self.stop_loss = None  # stop-loss price of the only one open trade
-
-    def update(self, price):
-        self.set_lower_grid_value(price)
-
-        if not self.lower_grid_values_timeline:
-            self.lower_grid_values_timeline.append(self.curr_lower_grid_value)
-            return "do_nothing"
-
-        if self.lower_grid_values_timeline[-1] != self.curr_lower_grid_value:
-            self.lower_grid_values_timeline.append(self.curr_lower_grid_value)
-
-        if self.status == "uninitialized":
-            self.status = "out_of_trade"
-            return "do_nothing"
-        elif self.status == "out_of_trade":
-            if len(self.lower_grid_values_timeline) < 3:
-                return "do_nothing"
-            elif self.lower_grid_values_timeline[-3] < self.lower_grid_values_timeline[-2] < \
-                    self.lower_grid_values_timeline[-1]:
-
-                self.status = "in_trade"
-                self.stop_loss = price * self.stop_loss_coef
-                return "buy"
-            else:
-                return "do_nothing"
-        elif self.status == "in_trade":
-            self.stop_loss = max(self.stop_loss, price * self.stop_loss_coef)
-            if price <= self.stop_loss:
-                self.status = "out_of_trade"
-                self.stop_loss = None
-                return "sell"
-            else:
-                return "do_nothing"
-        else:
-            raise ValueError
-
-    def set_lower_grid_value(self, price):
-        # multiply and divide multiple times with same number gives same results? according to my tests: yes
-        if price < self.curr_lower_grid_value:
-            for _ in range(100):
-                self.curr_lower_grid_value /= self.step
-                if self.curr_lower_grid_value <= price:
-                    return
-            raise Exception('Too large price change compared to grid step size')
-        elif self.curr_lower_grid_value <= price < self.curr_lower_grid_value * self.step:
-            return
-        else:
-            for _ in range(100):
-                self.curr_lower_grid_value *= self.step
-                if price < self.curr_lower_grid_value * self.step:
-                    return
-            raise Exception('Too large price change compared to grid step size')
-
-
-class LimitTrader:
-    def __init__(self, buy_lim_coef, stop_loss_coef):
-        self.status = "uninitialized"
-
-        self.buy_lim_coef = 1 + buy_lim_coef
-        self.stop_loss_coef = 1 - stop_loss_coef
-
-        self.buy_lim = None
-        self.stop_loss = None
-
-    def update(self, price):
-        if self.status == "uninitialized":
-            self.status = "out_of_trade"
-            self.buy_lim = price * self.buy_lim_coef
-            return "do_nothing"
-        elif self.status == "out_of_trade":
-            self.buy_lim = min(self.buy_lim, price * self.buy_lim_coef)
-            if price >= self.buy_lim:
-                self.status = "in_trade"
-                self.buy_lim = None
-                self.stop_loss = price * self.stop_loss_coef
-                return "buy"
-            else:
-                return "do_nothing"
-        elif self.status == "in_trade":
-            self.stop_loss = max(self.stop_loss, price * self.stop_loss_coef)
-            if price <= self.stop_loss:
-                self.status = "out_of_trade"
-                self.buy_lim = price * self.buy_lim_coef
-                self.stop_loss = None
-                return "sell"
-            else:
-                return "do_nothing"
-        else:
-            raise ValueError
-
-
 class Account:
     def __init__(self):
         self.wallet = 0
@@ -215,7 +114,8 @@ class Account:
         # limited functionality: one open trade at a time
         assert len(self.open_trades) == 0
         self.wallet -= price * qty  # value of trade
-        self.wallet -= price * qty * 0.01 * 0.05  # commission
+        # https://www.binance.com/en/fee/trading
+        self.wallet -= price * qty * 0.001 * 2  # buy and trade commission
         self.open_trades.append({'buy_price': price,
                                  'qty': qty,
                                  'sell_limit': sell_limit,
@@ -275,15 +175,13 @@ class MarketSimulator:
             account = Account()
             single_trader_params = self.trader_params.loc[i]
 
-            # TODO GridTrader instantly opens new order after a sell
-            # trader = GridTrader(
-            #     base_price=single_trader_params['base_price'],
-            #     step=single_trader_params['step'],
-            #     stop_loss_coef=single_trader_params['stop_loss_coef'])
-
-            trader = LimitTrader(
-                buy_lim_coef=single_trader_params['step'],
+            trader = GridTrader(
+                step=single_trader_params['step'],
                 stop_loss_coef=single_trader_params['stop_loss_coef'])
+
+            # trader = LimitTrader(
+            #     buy_lim_coef=single_trader_params['step'],
+            #     stop_loss_coef=single_trader_params['stop_loss_coef'])
 
             for j, price in enumerate(interval):
                 account.update(j, price)
