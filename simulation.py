@@ -7,7 +7,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 from tqdm import tqdm
 
-from traders import GridTrader, LimitTrader
+from traders import GbgsTrader, GblsTrader, LblsTrader
+from visualization import plot_histograms
 
 OPEN, HIGH, LOW, CLOSE = 0, 1, 2, 3
 
@@ -52,46 +53,6 @@ def convert_interval_to_timeseries(interval):
     return timeseries
 
 
-def plot_results(interval, account, trader, grid=None):
-    fig, axs = plt.subplots(2)
-    # axs[0].set_yticks([0, 50, 100, 150, 200], minor=False)
-    if grid is not None:
-        axs[0].set_yticks(grid, minor=True)
-    # axs[0].yaxis.grid(True, which='major')
-    axs[0].yaxis.grid(True, which='minor')
-
-    axs[0].set_xticks(account.market_actions, minor=True)
-    axs[0].xaxis.grid(True, which='minor')
-
-    axs[0].plot(interval)
-
-    axs[1].plot(account.wallet_timeline)  # , label=trader.label)
-
-    plt.legend()
-    plt.show()
-
-
-def get_random_trader_population(n_traders, base_price):
-    # trader_params = pd.DataFrame(columns=('base_price', 'scale', 'step', 'buy_at', 'stop_loss_coef', 'wallet'))
-    trader_params = pd.DataFrame(columns=('base_price', 'step', 'stop_loss_coef', 'wallet'))
-    for i in range(n_traders):
-        # step = 10 ** np.random.uniform(math.log10(0.005), math.log10(0.1))
-        step = np.random.uniform(0.005, 0.1)
-        # stop_loss_coef = 10 ** np.random.uniform(math.log10(0.005), math.log10(0.1))
-        stop_loss_coef = np.random.uniform(0.005, 0.1)
-        trader = {
-            # 'base_price': np.random.uniform(base_price * 0.9, base_price * 1.1),
-            'base_price': base_price,
-            # 'scale': np.random.choice(('log', 'lin')),
-            'step': step,
-            # 'buy_at': np.random.choice(('up', 'down')),
-            'stop_loss_coef': stop_loss_coef,
-            'wallet': np.nan
-        }
-        trader_params = trader_params.append(trader, ignore_index=True)
-    return trader_params
-
-
 class AccountSimulator:
     def __init__(self):
         self.original_wallet = self.wallet = 1
@@ -99,7 +60,7 @@ class AccountSimulator:
         self.open_buy_orders = []
         self.open_trades = []
         self.market_actions = []
-        self.n_buys = 0
+        self.n_trades = 0
 
     def update(self, i, price):
         # self.execute_limit_orders(price)
@@ -116,14 +77,15 @@ class AccountSimulator:
         # limited functionality: buy with all available money
         assert len(self.open_trades) == 0
         # https://www.binance.com/en/fee/trading
-        self.wallet *= 1 - (0.001 * 2)  # buy and sell commission combined
+        # self.wallet *= 1 - (0.001 * 2)  # buy and sell commission combined
+        self.wallet -= self.wallet * (0.001 * 2)  # buy and sell commission combined
         self.open_trades.append({'buy_price': price,
                                  'qty': qty,
                                  'sell_limit': sell_limit,
                                  'stop_loss': stop_loss})
         assert len(self.open_trades) == 1
         self.market_actions.append(i)
-        self.n_buys += 1
+        self.n_trades += 1
         # print(f"buy @ {price:.4}")
 
     def execute_market_sell(self, i, price):
@@ -164,25 +126,33 @@ class AccountSimulator:
     def get_wallet(self):
         return self.wallet_timeline[-1]
 
+    def get_n_trades(self):
+        return self.n_trades
 
-class MarketSimulator:
-    def __init__(self, trader_params):
-        assert isinstance(trader_params, pd.DataFrame)
-        self.trader_params = trader_params
+
+class HyperTuner:
+    def __init__(self):
+        pass
 
     def simulate(self, interval):
         best_wallet = -9999
-        for i in tqdm(range(len(self.trader_params))):
+
+        # gbgs_trader = GbgsTrader()
+        # gbls_trader = GblsTrader()
+        trader_params_df = LblsTrader.get_random_trader_population(
+            n_traders=1000, buy_lim_coef_lo=0.01, buy_lim_coef_hi=0.1, stop_loss_coef_lo=0.01, stop_loss_coef_hi=0.1)
+
+        for i in tqdm(range(len(trader_params_df))):
             account = AccountSimulator()
-            single_trader_params = self.trader_params.loc[i]
+            single_trader_params = trader_params_df.loc[i]
 
-            trader = GridTrader(
-                step=single_trader_params['step'],
-                stop_loss_coef=single_trader_params['stop_loss_coef'])
-
-            # trader = LimitTrader(
-            #     buy_lim_coef=single_trader_params['step'],
+            # trader = GridTrader(
+            #     step=single_trader_params['step'],
             #     stop_loss_coef=single_trader_params['stop_loss_coef'])
+
+            trader = LblsTrader(
+                buy_lim_coef=single_trader_params['buy_lim_coef'],
+                stop_loss_coef=single_trader_params['stop_loss_coef'])
 
             for j, price in enumerate(interval):
                 account.update(j, price)
@@ -194,7 +164,8 @@ class MarketSimulator:
                     account.execute_market_sell(j, price)
 
             wallet = account.get_wallet()
-            self.trader_params.at[i, 'wallet'] = wallet
+            trader_params_df.at[i, 'wallet'] = wallet
+            trader_params_df.at[i, 'n_trades'] = account.get_n_trades()
 
             if wallet > best_wallet:
                 saved_trader = trader
@@ -213,19 +184,21 @@ class MarketSimulator:
         #     grid.append(price)
 
         # plot_results(interval, saved_account, saved_trader, grid)
-        plot_results(interval, saved_account, saved_trader)
+        # plot_results(interval, saved_account, saved_trader)
 
-        print(self.trader_params)
-        print(self.trader_params.iloc[self.trader_params['wallet'].argmax()])
-        # https://www.statology.org/matplotlib-scatterplot-color-by-value/
-        plt.scatter(self.trader_params.step,
-                    self.trader_params.stop_loss_coef,
-                    s=50,
-                    c=self.trader_params.wallet,
-                    cmap='gray')
-        plt.xlabel("step")
-        plt.ylabel("stop_loss_coef")
-        plt.show()
+        # print(self.trader_params)
+        # print(self.trader_params.iloc[self.trader_params['wallet'].argmax()])
+        # # https://www.statology.org/matplotlib-scatterplot-color-by-value/
+        # plt.scatter(self.trader_params.step,
+        #             self.trader_params.stop_loss_coef,
+        #             s=50,
+        #             c=self.trader_params.wallet,
+        #             cmap='gray')
+        # plt.xlabel("step")
+        # plt.ylabel("stop_loss_coef")
+        # plt.show()
+
+        return trader_params_df
 
 
 def main():
@@ -234,13 +207,14 @@ def main():
 
     # https://data.binance.vision/?prefix=data/spot/monthly/klines/BTCUSDT/1m/
     # https://github.com/binance/binance-public-data/
-    df = pd.read_csv('data/BTCUSDT-1m-2021-11.csv')
+    df = pd.read_csv('data/BTCUSDT-1m-2021.csv')
+    # TODO use high/low values instead close
     ts = df.iloc[:, 4].to_numpy()
 
-    trader_params = get_random_trader_population(n_traders=200, base_price=45000.01)
+    me = HyperTuner()
+    trader_params_df = me.simulate(ts)
 
-    me = MarketSimulator(trader_params)
-    me.simulate(ts)
+    plot_histograms(trader_params_df, x='buy_lim_coef', y='stop_loss_coef', n_bins=10)
 
     # plot_results(ts, traders, traders[0].grid)
 
