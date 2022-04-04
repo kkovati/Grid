@@ -16,9 +16,12 @@ class GridManager:
 
 
 class OrderPair:
-    def __init__(self, pos_type, open_grid_idx):
+    def __init__(self, pos_type, price, value, open_grid_idx):
         assert pos_type is ('l', 's')
         self.pos_type = pos_type
+        self.price = price
+        self.value = value
+        self.quantity = value / price
         self.open_grid_idx = open_grid_idx
         if pos_type == 'l':
             self.close_grid_idx = open_grid_idx + 1
@@ -80,28 +83,33 @@ class LongShortTrader:
 
         return open_order_pair_to_close
 
-    def execute_combined_long_order_pairs(self, op_to_close: OrderPair, op_to_open: OrderPair):
-        assert op_to_close.pos_type == op_to_open.pos_type == 'l'
-        assert op_to_close.close_grid_idx == op_to_open.open_grid_idx
+    def execute_combined_order_pairs(self, op_long_to_close: OrderPair, op_short_to_close, op_to_open: OrderPair):
+        assert (op_long_to_close is not None) or (op_short_to_close is not None)
+        if op_to_open.pos_type == 'l':
+            if op_long_to_close is not None:
+                assert op_long_to_close.pos_type == 'l'
+                assert op_long_to_close.close_grid_idx == op_to_open.open_grid_idx
+                assert op_long_to_close.quantity > op_to_open.quantity
+                # TODO sell op_long_to_close.quantity - op_to_open.quantity
+            else:
+                pass
+                # TODO buy op_to_open.quantity
+            if op_short_to_close is not None:
+                pass
+                # TODO sell op_short_to_close.quantity
 
-    def execute_combined_short_order_pairs(self, op_to_close: OrderPair, op_to_open: OrderPair):
-        assert op_to_close.pos_type == op_to_open.pos_type == 's'
-        assert op_to_close.close_grid_idx == op_to_open.open_grid_idx
-
-    def do_grid_action(self, grid_idx):
+    def do_grid_action(self, price, grid_idx):
         """
         Anatomy of a grid action:
         - create the two order_pairs (long and short)
         - check which order pairs are already opened at that grid and delete that
         - check which open order pairs must be closed
         - combine orders if possible
-        :param grid_idx:
-        :return:
         """
+        op_long = OrderPair(pos_type='l', price=price, value=self.order_value, open_grid_idx=grid_idx)
+        op_short = OrderPair(pos_type='s', price=price, value=self.order_value, open_grid_idx=grid_idx)
 
-        op_long = OrderPair('l', grid_idx)
-        op_short = OrderPair('s', grid_idx)
-
+        # TODO put in function with extra check for duplicates
         for open_long_order_pair in self.open_long_order_pairs:
             if open_long_order_pair == op_long:
                 op_long = None

@@ -1,6 +1,3 @@
-
-
-
 class MarginAccountSimulator:
     def __init__(self):
         self.original_wallet = self.wallet = 1
@@ -9,6 +6,24 @@ class MarginAccountSimulator:
         self.open_trades = []
         self.market_actions = []
         self.n_trades = 0
+
+        self.price = 0
+
+        self.borrowed_base_currency = 0
+        self.borrowed_quote_currency = 0
+
+    def long_borrow_and_buy(self, value):
+        amount = value / self.price
+        self.borrowed_base_currency += value
+
+        # TODO commission see example in AccountSimulator
+
+    def long_sell_and_repay(self, amount):
+        value = amount * self.price
+
+    def short_borrow_and_sell(self, amount):
+        value = amount * self.price
+
 
     def update(self, i, price):
         self.wallet_timeline.append(self.calculate_investment_value(price))
@@ -19,11 +34,11 @@ class MarginAccountSimulator:
     def get_open_trades(self):
         return self.open_trades
 
-    def long(self, price):
-        pass
 
-    def short(self, price):
-        pass
+
+
+
+
 
     def execute_market_buy(self, i, price, qty=1, sell_limit=None, stop_loss=None):
         # limited functionality: one open trade at a time
