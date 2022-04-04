@@ -1,4 +1,6 @@
+import numpy as np
 from typing import Tuple
+import pandas as pd
 
 from .simulation import MarginAccountSimulator
 
@@ -67,6 +69,19 @@ class LongShortTrader:
         self.lower_action_price = self.grid_manager[self.lower_action_grid_idx]
 
         self.grid_values_timeline = []
+
+    @staticmethod
+    def get_random_trader_population(n_traders, step_lo, step_hi):
+        trader_params = pd.DataFrame(columns=('step', 'profit', 'n_trades'))
+        for i in range(n_traders):
+            step = np.random.uniform(step_lo, step_hi)
+            trader = {
+                'step': step,
+                'wallet': np.nan,
+                'n_trades': np.nan
+            }
+            trader_params = trader_params.append(trader, ignore_index=True)
+        return trader_params
 
     def check_order_pair_already_open(self, op_long: OrderPair, op_short: OrderPair) -> Tuple[OrderPair, OrderPair]:
         for open_order_pair in self.open_order_pairs:
@@ -149,10 +164,7 @@ class LongShortTrader:
         - check if price has reached an action price
         - do grid action
         - update action prices
-        :param price:
-        :return:
         """
-
         if price >= self.upper_action_price:
             self.do_grid_action(self.upper_action_grid_idx)
             self.upper_action_grid_idx += 1
