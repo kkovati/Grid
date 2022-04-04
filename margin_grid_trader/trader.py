@@ -1,3 +1,6 @@
+from .simulation import MarginAccountSimulator
+
+
 class GridManager:
     def __init__(self, initial_price, step):
         assert 0 < step < 0.2
@@ -21,7 +24,7 @@ class OrderPair:
         self.pos_type = pos_type
         self.price = price
         self.value = value
-        self.quantity = value / price
+        self.amount = value / price
         self.open_grid_idx = open_grid_idx
         if pos_type == 'l':
             self.close_grid_idx = open_grid_idx + 1
@@ -38,7 +41,8 @@ class LongShortTrader:
     Opens a long and a short position at every grid
     """
 
-    def __init__(self, initial_price, step, order_value=1):
+    def __init__(self, acc: MarginAccountSimulator, initial_price, step, order_value=1):
+        self.acc = acc
         self.grid_manager = GridManager(initial_price, step)
 
         self.order_value = order_value  # value of a single long or short trade in base currency
@@ -49,9 +53,12 @@ class LongShortTrader:
         self.open_short_order_pairs = []
 
         # place initial order pairs
-        op_long = OrderPair('l', 0)
-        op_short = OrderPair('s', 0)
-        pass
+        op_long = OrderPair('l', price=initial_price, value=self.order_value, open_grid_idx=0)
+        op_short = OrderPair('s', price=initial_price, value=self.order_value, open_grid_idx=0)
+        acc.long_borrow_and_buy(value=op_long.value)
+        acc.short_borrow_and_sell(amount=op_short.amount)
+        self.open_long_order_pairs.append(op_long)
+        self.open_short_order_pairs.append(op_short)
 
         self.upper_action_grid_idx = 1
         self.lower_action_grid_idx = -1
@@ -59,12 +66,6 @@ class LongShortTrader:
         self.lower_action_price = self.grid_manager[self.lower_action_grid_idx]
 
         self.grid_values_timeline = []
-
-    def get_long_trade_size(self, price):
-        return price / self.unit_value
-
-    def get_short_trade_size(self, price):
-        return price / self.unit_value
 
     def get_order_pair_to_close(self, grid_idx: int) -> OrderPair:
         """
