@@ -14,13 +14,31 @@ class MarginAccountSimulator:
         self.wallet_timeline = []
         self.borrowed_value_timeline = []
 
-    def long_borrow_and_buy(self, value):
+    def convert_value_amount(self, value=None, amount=None):
+        assert (value is None) != (amount is None)  # XOR
+        if value is None:
+            value = amount * self.price
+        else:
+            amount = value / self.price
+        return value, amount
+
+    def long_borrow_and_buy(self, value=None, amount=None):
+        """
+        Default input: value
+        Price calculated input: amount
+        """
+        value, amount = self.convert_value_amount(value, amount)
         self.borrowed_base_currency += value
         amount = value / self.price
         self.owned_quote_currency += amount
         self.wallet -= value * self.commission
 
-    def long_sell_and_repay(self, amount):
+    def long_sell_and_repay(self, amount=None, value=None):
+        """
+        Default input: amount
+        Price calculated input: value
+        """
+        value, amount = self.convert_value_amount(value, amount)
         if amount > self.owned_quote_currency:
             amount = self.owned_quote_currency
             self.owned_quote_currency = 0
@@ -34,13 +52,23 @@ class MarginAccountSimulator:
             self.borrowed_base_currency -= value
         self.wallet -= value * self.commission
 
-    def short_borrow_and_sell(self, amount: float):
+    def short_borrow_and_sell(self, amount=None, value=None):
+        """
+        Default input: amount
+        Price calculated input: value
+        """
+        value, amount = self.convert_value_amount(value, amount)
         self.borrowed_quote_currency += amount
         value = amount * self.price
         self.owned_base_currency += value
         self.wallet -= value * self.commission
 
-    def short_buy_and_repay(self, value):
+    def short_buy_and_repay(self, value=None, amount=None):
+        """
+        Default input: value
+        Price calculated input: amount
+        """
+        value, amount = self.convert_value_amount(value, amount)
         if value > self.owned_base_currency:
             self.wallet -= value - self.owned_base_currency
             self.owned_base_currency = 0
