@@ -1,19 +1,20 @@
+import logging
 import matplotlib.pyplot as plt
 import pandas as pd
 import plotly.express as px
 from tqdm import tqdm
 
-from margin_grid_trader.simulation import MarginAccountSimulator
+from margin_grid_trader.account import MarginAccountSimulator
 from margin_grid_trader.trader import LongShortTrader
 
 
 def simulate(interval):
     best_wallet = -9999
+    # logging.basicConfig(level=logging.DEBUG)
 
-    trader_params_df = LongShortTrader.get_random_trader_population(n_traders=1, step_lo=0.01, step_hi=0.1)
+    trader_params_df = LongShortTrader.get_random_trader_population(n_traders=10, step_lo=0.01, step_hi=0.1)
 
-    # for i in tqdm(range(len(trader_params_df))):
-    for i in range(len(trader_params_df)):
+    for i in tqdm(range(len(trader_params_df))):
         account = MarginAccountSimulator()
         single_trader_params = trader_params_df.loc[i]
 
@@ -35,9 +36,11 @@ def simulate(interval):
             saved_account = account
             best_wallet = wallet
 
+    # logging.basicConfig(level=logging.INFO)
+
     grid = saved_trader.grid_manager.get_grid_list()
 
-    # plot_results(interval, saved_account, saved_trader, grid)
+    plot_results(interval, saved_account, saved_trader, grid)
 
     # print(self.trader_params)
     # print(self.trader_params.iloc[self.trader_params['wallet'].argmax()])
@@ -67,26 +70,29 @@ def plot_histograms(df, x, y, n_bins=10):
 
 
 def plot_results(interval, account: MarginAccountSimulator, trader, grid=None):
-    fig, axs = plt.subplots(2)
-    # axs[0].set_yticks([0, 50, 100, 150, 200], minor=False)
+    fig, axs = plt.subplots(3)
     if grid is not None:
         axs[0].set_yticks(grid, minor=True)
-    # axs[0].yaxis.grid(True, which='major')
     axs[0].yaxis.grid(True, which='minor')
 
     # axs[0].set_xticks(account.market_actions, minor=True) TODO need this
-    axs[0].xaxis.grid(True, which='minor')
+    # axs[0].xaxis.grid(True, which='minor')
+    axs[0].xaxis.grid(True, which='both')
 
     axs[0].plot(interval)
 
     axs[1].plot(account.wallet_timeline)  # , label=trader.label)
+    axs[1].xaxis.grid(True, which='both')
+
+    axs[2].plot(account.borrowed_value_timeline)  # , label=trader.label)
+    axs[2].xaxis.grid(True, which='both')
 
     plt.legend()
     plt.show()
 
 
 def main():
-    df = pd.read_csv('../data/BTCUSDT-1m-2021-12.csv')
+    df = pd.read_csv('../data/BTCUSDT-1m-2021.csv')
     # TODO use high/low values instead close
     ts = df.iloc[:, 4].to_numpy()
 

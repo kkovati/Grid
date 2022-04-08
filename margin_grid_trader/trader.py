@@ -1,8 +1,9 @@
+import logging
 import numpy as np
 from typing import Tuple
 import pandas as pd
 
-from .simulation import MarginAccountSimulator
+from .account import MarginAccountSimulator
 
 
 class GridManager:
@@ -68,8 +69,8 @@ class LongShortTrader:
     """
 
     def __init__(self, acc: MarginAccountSimulator, initial_price, step, order_value=1000):
-        print("-------------------------------")
-        print(f"MarginAccountSimulator step: {step}")
+        logging.debug("-------------------------------")
+        logging.debug(f"MarginAccountSimulator step: {step}")
 
         self.acc = acc
         self.grid_manager = GridManager(initial_price, step)
@@ -83,10 +84,10 @@ class LongShortTrader:
         # place initial order pairs
         op_long = OrderPair(pos_type='l', time=0, price=initial_price, value=self.order_value, open_grid_idx=0)
         op_short = OrderPair(pos_type='s', time=0, price=initial_price, value=self.order_value, open_grid_idx=0)
-        print("-------------------------------")
-        print("Inital orders:")
-        print(op_long)
-        print(op_short)
+        logging.debug("-------------------------------")
+        logging.debug("Inital orders:")
+        logging.debug(op_long)
+        logging.debug(op_short)
         self.acc.long_borrow_and_buy(value=op_long.value)
         self.acc.short_borrow_and_sell(amount=op_short.amount)
         self.open_order_pairs.append(op_long)
@@ -118,11 +119,11 @@ class LongShortTrader:
         op_short_already_opened = False
         for open_order_pair in self.open_order_pairs:
             if open_order_pair == op_long:
-                print(f"Long order pair already opened at time: {open_order_pair.time}")
+                logging.debug(f"Long order pair already opened at time: {open_order_pair.time}")
                 assert op_long_already_opened is False  # check for duplicates
                 op_long_already_opened = True
             if open_order_pair == op_short:
-                print(f"Short order pair already opened at time: {open_order_pair.time}")
+                logging.debug(f"Short order pair already opened at time: {open_order_pair.time}")
                 assert op_short_already_opened is False  # check for duplicates
                 op_short_already_opened = True
         return (None if op_long_already_opened else op_long), (None if op_short_already_opened else op_short)
@@ -154,7 +155,8 @@ class LongShortTrader:
             if op_long_to_open is not None:
                 assert op_long_to_open.pos_type == 'l'
                 assert op_long_to_open.open_grid_idx == op_to_close.close_grid_idx
-                assert op_to_close.amount > op_long_to_open.amount
+                # this does not always meet if more than on grid is jumped through in one update step
+                # assert op_to_close.amount > op_long_to_open.amount
                 self.acc.long_sell_and_repay(amount=op_to_close.amount - op_long_to_open.amount)
             else:
                 self.acc.long_sell_and_repay(amount=op_to_close.amount)
@@ -164,7 +166,8 @@ class LongShortTrader:
             if op_short_to_open is not None:
                 assert op_short_to_open.pos_type == 's'
                 assert op_short_to_open.open_grid_idx == op_to_close.close_grid_idx
-                assert op_to_close.amount < op_short_to_open.amount
+                # this does not always meet if more than on grid is jumped through in one update step
+                # assert op_to_close.amount < op_short_to_open.amount
                 self.acc.short_borrow_and_sell(amount=op_short_to_open.amount - op_to_close.amount)
             else:
                 self.acc.short_buy_and_repay(amount=op_to_close.amount)
@@ -179,26 +182,36 @@ class LongShortTrader:
         - check which open order pairs must be closed
         - combine orders if possible
         """
-        print("-------------------------------")
-        print(f"Grid action - time: {time} price: {price} grid idx: {grid_idx}")
+        logging.debug("-------------------------------")
+        logging.debug(f"Grid action - time: {time} price: {price} grid idx: {grid_idx}")
 
         op_long = OrderPair(pos_type='l', time=time, price=price, value=self.order_value, open_grid_idx=grid_idx)
         op_short = OrderPair(pos_type='s', time=time, price=price, value=self.order_value, open_grid_idx=grid_idx)
 
         op_long, op_short = self.check_order_pair_already_open(op_long, op_short)
-        print("Open order pairs:")
+        logging.debug("Open order pairs:")
         if op_long is not None:  # TODO this may can go into check_order_pair_already_open
-            print(op_long)
+            logging.debug(op_long)
             self.open_order_pairs.append(op_long)
         if op_short is not None:
-            print(op_short)
+            logging.debug(op_short)
             self.open_order_pairs.append(op_short)
 
         op_to_close = self.get_order_pair_to_close(grid_idx)
-        print("Close order pair:")
-        print(op_to_close)
+        logging.debug("Close order pair:")
+        logging.debug(op_to_close)
 
         self.execute_combined_order_pairs(op_long, op_short, op_to_close)
+
+        op_long_count = op_short_count = 0
+        for op in self.open_order_pairs:
+            if op.pos_type == 'l':
+                op_long_count += 1
+            else:
+                op_short_count += 1
+        logging.debug(f"Open long/short order pair count: {op_long_count}/{op_short_count}")
+        logging.debug(f"Borrowed  base value: {self.acc.borrowed_base_currency * price}")
+        logging.debug(f"Borrowed quote value: {self.acc.borrowed_quote_currency}")
 
     def update(self, time, price):
         """

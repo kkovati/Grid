@@ -1,3 +1,6 @@
+import logging
+
+
 class MarginAccountSimulator:
     def __init__(self):
         self.wallet = 0  # TODO wallet and owned_base_currency can be the same
@@ -13,6 +16,7 @@ class MarginAccountSimulator:
         self.price_timeline = []
         self.wallet_timeline = []
         self.borrowed_value_timeline = []
+        self.market_actions = []
 
         self.max_borrowed_value = 0
         self.trade_count = 0
@@ -36,7 +40,7 @@ class MarginAccountSimulator:
         amount = value / self.price
         self.owned_quote_currency += amount
         self.wallet -= value * self.commission
-        print(f"long_borrow_and_buy value: {float(value):.5} amount: {amount:.2}")
+        logging.debug(f"long_borrow_and_buy value: {float(value):.5} amount: {amount:.2}")
 
     def long_sell_and_repay(self, amount=None, value=None):
         """
@@ -57,7 +61,7 @@ class MarginAccountSimulator:
         else:
             self.borrowed_base_currency -= value
         self.wallet -= value * self.commission
-        print(f"long_sell_and_repay value: {float(value):.5} amount: {amount:.2}")
+        logging.debug(f"long_sell_and_repay value: {float(value):.5} amount: {amount:.2}")
 
     def short_borrow_and_sell(self, amount=None, value=None):
         """
@@ -70,7 +74,7 @@ class MarginAccountSimulator:
         value = amount * self.price
         self.owned_base_currency += value
         self.wallet -= value * self.commission
-        print(f"short_borrow_and_sell value: {float(value):.5} amount: {amount:.2}")
+        logging.debug(f"short_borrow_and_sell value: {float(value):.5} amount: {amount:.2}")
 
     def short_buy_and_repay(self, value=None, amount=None):
         """
@@ -91,7 +95,7 @@ class MarginAccountSimulator:
         else:
             self.borrowed_quote_currency -= amount
         self.wallet -= value * self.commission
-        print(f"short_buy_and_repay value: {float(value):.5} amount: {amount:.2}")
+        logging.debug(f"short_buy_and_repay value: {float(value):.5} amount: {amount:.2}")
 
     def get_investment_value(self, price):
         value = 0
@@ -113,5 +117,4 @@ class MarginAccountSimulator:
         self.price_timeline.append(price)
         self.wallet_timeline.append(self.get_investment_value(price))
         self.borrowed_value_timeline.append(self.get_borrowed_value(price))
-
         self.max_borrowed_value = max(self.max_borrowed_value, self.get_borrowed_value(price))
