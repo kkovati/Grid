@@ -4,12 +4,19 @@ from binance.lib.utils import config_logging
 from binance.error import ClientError
 import time
 
-config_logging(logging, logging.DEBUG)
+
+"""
+This module is a trial for:
+binance/binance-connector-python 
+This seems to be the official lib
+"""
 
 # API Key: sW9XjJLxvqDBiFZtQ9m3FDK1iHYTMxIZttQH8AUL9AzYbJoXrvW8dAgUXcsMgrdD
 # Secret Key: CuZWeDhZxmk2G6MqOlBC0I6Zo3yAOtBpKZcIgyDmfLibJTN7ww4kcIVWrJIda9mR
 # https://testnet.binance.vision/api
 
+
+config_logging(logging, logging.DEBUG)
 
 params = {
     "symbol": "BTCUSDT",
