@@ -68,11 +68,15 @@ class LongShortTrader:
     Opens a long and a short position at every grid
     """
 
-    def __init__(self, acc: MarginAccountSimulator, initial_price, step, order_value=1000):
+    def __init__(self, acc: MarginAccountSimulator, initial_price, step, n_max_open_order=0, order_value=1000):
         logging.debug("-------------------------------")
         logging.debug(f"MarginAccountSimulator step: {step}")
 
         self.acc = acc
+
+        self.initial_price = initial_price
+        self.step = step
+        self.n_max_open_order = n_max_open_order
         self.grid_manager = GridManager(initial_price, step)
 
         self.order_value = order_value  # value of a single long or short trade in base currency
@@ -85,7 +89,7 @@ class LongShortTrader:
         op_long = OrderPair(pos_type='l', time=0, price=initial_price, value=self.order_value, open_grid_idx=0)
         op_short = OrderPair(pos_type='s', time=0, price=initial_price, value=self.order_value, open_grid_idx=0)
         logging.debug("-------------------------------")
-        logging.debug("Inital orders:")
+        logging.debug("Initial orders:")
         logging.debug(op_long)
         logging.debug(op_short)
         self.acc.long_borrow_and_buy(value=op_long.value)
@@ -173,6 +177,9 @@ class LongShortTrader:
                 self.acc.short_buy_and_repay(amount=op_to_close.amount)
             if op_long_to_open is not None:
                 self.acc.long_borrow_and_buy(amount=op_long_to_open.amount)
+
+    def liquidate(self):
+        pass
 
     def do_grid_action(self, time, price, grid_idx):
         """

@@ -12,7 +12,8 @@ def simulate(interval):
     best_wallet = -9999
     # logging.basicConfig(level=logging.DEBUG)
 
-    trader_params_df = LongShortTrader.get_random_trader_population(n_traders=10, step_lo=0.01, step_hi=0.1)
+    trader_params_df = LongShortTrader.get_random_trader_population(n_traders=1, step_lo=0.01, step_hi=0.1)
+    trader_params_df.at[0, "step"] = 0.02  # TODO for debug
 
     for i in tqdm(range(len(trader_params_df))):
         account = MarginAccountSimulator()
