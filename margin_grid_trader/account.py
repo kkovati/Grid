@@ -3,7 +3,6 @@ import logging
 
 class MarginAccountSimulator:
     def __init__(self):
-        self.wallet = 0  # TODO wallet and owned_base_currency can be the same
         self.borrowed_base_currency = 0
         self.borrowed_quote_currency = 0
         self.owned_base_currency = 0
@@ -21,12 +20,12 @@ class MarginAccountSimulator:
         self.max_borrowed_value = 0
         self.trade_count = 0
 
-    def convert_value_amount(self, value=None, amount=None):
+    def convert_value_amount(self, value: float = None, amount: float = None):
         assert (value is None) != (amount is None)  # XOR
         if value is None:
-            value = amount * self.price
+            value = amount * self.price  # noqa
         else:
-            amount = value / self.price
+            amount = value / self.price  # noqa
         return value, amount
 
     def long_borrow_and_buy(self, value=None, amount=None):
@@ -37,9 +36,8 @@ class MarginAccountSimulator:
         self.trade_count += 1
         value, amount = self.convert_value_amount(value, amount)
         self.borrowed_base_currency += value
-        amount = value / self.price
         self.owned_quote_currency += amount
-        self.wallet -= value * self.commission
+        self.owned_base_currency -= value * self.commission
         logging.debug(f"long_borrow_and_buy value: {float(value):.5} amount: {amount:.2}")
 
     def long_sell_and_repay(self, amount=None, value=None):
@@ -51,16 +49,14 @@ class MarginAccountSimulator:
         value, amount = self.convert_value_amount(value, amount)
         if amount > self.owned_quote_currency:
             amount = self.owned_quote_currency
-            self.owned_quote_currency = 0
-        else:
-            self.owned_quote_currency -= amount
-        value = amount * self.price
+            value, amount = self.convert_value_amount(value=None, amount=amount)
+        self.owned_quote_currency -= amount
         if value > self.borrowed_base_currency:
-            self.wallet += value - self.borrowed_base_currency
+            self.owned_base_currency += value - self.borrowed_base_currency
             self.borrowed_base_currency = 0
         else:
             self.borrowed_base_currency -= value
-        self.wallet -= value * self.commission
+        self.owned_base_currency -= value * self.commission
         logging.debug(f"long_sell_and_repay value: {float(value):.5} amount: {amount:.2}")
 
     def short_borrow_and_sell(self, amount=None, value=None):
@@ -71,9 +67,8 @@ class MarginAccountSimulator:
         self.trade_count += 1
         value, amount = self.convert_value_amount(value, amount)
         self.borrowed_quote_currency += amount
-        value = amount * self.price
         self.owned_base_currency += value
-        self.wallet -= value * self.commission
+        self.owned_base_currency -= value * self.commission
         logging.debug(f"short_borrow_and_sell value: {float(value):.5} amount: {amount:.2}")
 
     def short_buy_and_repay(self, value=None, amount=None):
@@ -83,23 +78,19 @@ class MarginAccountSimulator:
         """
         self.trade_count += 1
         value, amount = self.convert_value_amount(value, amount)
-        if value > self.owned_base_currency:
-            self.wallet -= value - self.owned_base_currency
-            self.owned_base_currency = 0
-        else:
-            self.owned_base_currency -= value
-        amount = value / self.price
+        self.owned_base_currency -= value
         if amount > self.borrowed_quote_currency:
             self.owned_quote_currency += amount - self.borrowed_quote_currency
             self.borrowed_quote_currency = 0
         else:
             self.borrowed_quote_currency -= amount
-        self.wallet -= value * self.commission
+        self.owned_base_currency -= value * self.commission
+        if self.owned_base_currency < 0:
+            pass  # TODO liquidate
         logging.debug(f"short_buy_and_repay value: {float(value):.5} amount: {amount:.2}")
 
     def get_investment_value(self, price):
         value = 0
-        value += self.wallet
         value += self.owned_base_currency
         value += self.owned_quote_currency * price
         value -= self.borrowed_base_currency

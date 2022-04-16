@@ -1,4 +1,5 @@
 
+from binance import Client, ThreadedWebsocketManager, ThreadedDepthCacheManager
 
 
 """
@@ -10,4 +11,16 @@ https://github.com/sammchardy/python-binance
 https://python-binance.readthedocs.io/en/latest/
 
 
+
+Note: check which currencies have the lowest interest rates
+https://www.binance.com/en/fee/marginFee
+
+
 """
+
+
+if __name__ == '__main__':
+
+    api_key = "asd"
+    api_secret = "asd"
+    client = Client(api_key, api_secret)
