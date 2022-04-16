@@ -68,18 +68,20 @@ class LongShortTrader:
     Opens a long and a short position at every grid
     """
 
-    def __init__(self, acc: MarginAccountSimulator, initial_price, step, n_max_open_order=0, order_value=1000):
+    def __init__(self, acc: MarginAccountSimulator, initial_price, step, order_pair_size_ratio):
         logging.debug("-------------------------------")
-        logging.debug(f"MarginAccountSimulator step: {step}")
+        logging.debug(f"MarginAccountSimulator step: {step} ratio: {order_pair_size_ratio}")
 
         self.acc = acc
 
         self.initial_price = initial_price
-        self.step = step
-        self.n_max_open_order = n_max_open_order
-        self.grid_manager = GridManager(initial_price, step)
 
-        self.order_value = order_value  # value of a single long or short trade in base currency
+        self.step = step
+        self.order_pair_size_ratio = order_pair_size_ratio
+        # value of a single long or short trade in base currency
+        self.order_value = order_pair_size_ratio * acc.get_owned_base_currency()
+
+        self.grid_manager = GridManager(initial_price, step)
 
         # order pair is a buy-sell (long) or a sell-buy (short) order pair
         # if it is in the list the first order is already done and second is not
@@ -104,14 +106,19 @@ class LongShortTrader:
 
         self.grid_values_timeline = []
 
+    def __str__(self):
+        return f"LongShortTrader step: {self.step:.4} ratio:{self.order_pair_size_ratio:.4}"
+
     @staticmethod
-    def get_random_trader_population(n_traders, step_lo, step_hi):
+    def get_random_trader_population(n_traders, step_lo, step_hi, ratio_lo, ratio_hi):
         np.random.seed(0)
-        trader_params = pd.DataFrame(columns=('step', 'profit', 'n_trades'))
+        trader_params = pd.DataFrame(columns=('step', 'ratio', 'profit', 'n_trades'))
         for i in range(n_traders):
             step = np.random.uniform(step_lo, step_hi)
+            ratio = np.random.uniform(ratio_lo, ratio_hi)
             trader = {
                 'step': step,
+                'ratio': ratio,
                 'wallet': np.nan,
                 'n_trades': np.nan
             }

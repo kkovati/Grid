@@ -9,24 +9,29 @@ from margin_grid_trader.trader import LongShortTrader
 
 
 def simulate(interval):
+    # Constants
+    initial_base_currency = 1000
     best_wallet = -9999
     # logging.basicConfig(level=logging.DEBUG)
 
-    trader_params_df = LongShortTrader.get_random_trader_population(n_traders=1, step_lo=0.01, step_hi=0.1)
-    trader_params_df.at[0, "step"] = 0.02  # TODO for debug
+    trader_params_df = LongShortTrader.get_random_trader_population(
+        n_traders=1000, step_lo=0.005, step_hi=0.1, ratio_lo=0.001, ratio_hi=0.1)
+    # trader_params_df.at[0, "step"] = 0.02  # TODO for debug
+    # trader_params_df.at[0, "ratio"] = 0.01  # TODO for debug
 
     for i in tqdm(range(len(trader_params_df))):
-        account = MarginAccountSimulator()
+        account = MarginAccountSimulator(initial_base_currency)
         single_trader_params = trader_params_df.loc[i]
 
         account.update(0, interval[0])
-        trader = LongShortTrader(acc=account, initial_price=interval[0], step=single_trader_params['step'])
+        trader = LongShortTrader(
+            acc=account, initial_price=interval[0], step=single_trader_params['step'],
+            order_pair_size_ratio=single_trader_params['ratio'])
 
         for j, price in enumerate(interval[1:]):
             assert price > 0
-            j += 1
-            account.update(j, price)
-            trader.update(j, price)
+            account.update(j + 1, price)
+            trader.update(j + 1, price)
 
         wallet = account.get_investment_value(interval[-1])
         trader_params_df.at[i, 'wallet'] = wallet
@@ -37,23 +42,13 @@ def simulate(interval):
             saved_account = account
             best_wallet = wallet
 
-    # logging.basicConfig(level=logging.INFO)
+    print(saved_trader)
+    print(best_wallet)
 
     grid = saved_trader.grid_manager.get_grid_list()
+    plot_results(saved_account, grid)
 
-    plot_results(interval, saved_account, saved_trader, grid)
-
-    # print(self.trader_params)
-    # print(self.trader_params.iloc[self.trader_params['wallet'].argmax()])
-    # # https://www.statology.org/matplotlib-scatterplot-color-by-value/
-    # plt.scatter(self.trader_params.step,
-    #             self.trader_params.stop_loss_coef,
-    #             s=50,
-    #             c=self.trader_params.wallet,
-    #             cmap='gray')
-    # plt.xlabel("step")
-    # plt.ylabel("stop_loss_coef")
-    # plt.show()
+    plot_histograms(trader_params_df, x='step', y='ratio', n_bins=10)
 
     return trader_params_df
 
@@ -70,7 +65,22 @@ def plot_histograms(df, x, y, n_bins=10):
     fig.show()
 
 
-def plot_results(interval, account: MarginAccountSimulator, trader, grid=None):
+def plot_scatter():
+    pass
+    # print(self.trader_params)
+    # print(self.trader_params.iloc[self.trader_params['wallet'].argmax()])
+    # # https://www.statology.org/matplotlib-scatterplot-color-by-value/
+    # plt.scatter(self.trader_params.step,
+    #             self.trader_params.stop_loss_coef,
+    #             s=50,
+    #             c=self.trader_params.wallet,
+    #             cmap='gray')
+    # plt.xlabel("step")
+    # plt.ylabel("stop_loss_coef")
+    # plt.show()
+
+
+def plot_results(account: MarginAccountSimulator, grid=None):
     fig, axs = plt.subplots(3)
     if grid is not None:
         axs[0].set_yticks(grid, minor=True)
@@ -80,7 +90,7 @@ def plot_results(interval, account: MarginAccountSimulator, trader, grid=None):
     # axs[0].xaxis.grid(True, which='minor')
     axs[0].xaxis.grid(True, which='both')
 
-    axs[0].plot(interval)
+    axs[0].plot(account.price_timeline)
 
     axs[1].plot(account.wallet_timeline)  # , label=trader.label)
     axs[1].xaxis.grid(True, which='both')
@@ -99,11 +109,6 @@ def main():
 
     simulate(ts)
 
-    # plot_histograms(trader_params_df, x='buy_lim_coef', y='stop_loss_coef', n_bins=10) TODO need this
-
-    # plot_results(ts, traders, traders[0].grid)
-
 
 if __name__ == '__main__':
     main()
-

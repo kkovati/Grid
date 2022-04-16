@@ -2,11 +2,11 @@ import logging
 
 
 class MarginAccountSimulator:
-    def __init__(self):
+    def __init__(self, initial_base_currency=1000):
+        self.owned_base_currency = initial_base_currency
+        self.owned_quote_currency = 0
         self.borrowed_base_currency = 0
         self.borrowed_quote_currency = 0
-        self.owned_base_currency = 0
-        self.owned_quote_currency = 0
 
         self.commission = 0.001
 
@@ -88,6 +88,9 @@ class MarginAccountSimulator:
         if self.owned_base_currency < 0:
             pass  # TODO liquidate
         logging.debug(f"short_buy_and_repay value: {float(value):.5} amount: {amount:.2}")
+
+    def get_owned_base_currency(self):
+        return self.owned_base_currency
 
     def get_investment_value(self, price):
         value = 0
