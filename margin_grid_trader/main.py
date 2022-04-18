@@ -7,43 +7,56 @@ from tqdm import tqdm
 from margin_grid_trader.account import MarginAccountSimulator
 from margin_grid_trader.trader import LongShortTrader
 
+logging.basicConfig(level=logging.DEBUG,
+                    format='%(message)s',
+                    handlers=[
+                        logging.StreamHandler(),
+                        logging.FileHandler(
+                            filename='app.log',
+                            mode='w')])
+# format='%(name)s - %(levelname)s - %(message)s'
+# format='%(asctime)s - %(message)s'
+# datefmt='%d-%b-%y %H:%M:%S'
+
 
 def simulate(interval):
     # Constants
     initial_base_currency = 1000
     best_wallet = -9999
-    # logging.basicConfig(level=logging.DEBUG)
 
     trader_params_df = LongShortTrader.get_random_trader_population(
-        n_traders=1000, step_lo=0.005, step_hi=0.1, ratio_lo=0.001, ratio_hi=0.1)
-    # trader_params_df.at[0, "step"] = 0.02  # TODO for debug
-    # trader_params_df.at[0, "ratio"] = 0.01  # TODO for debug
+        n_traders=1, step_lo=0.0035, step_hi=0.01, ratio_lo=0.001, ratio_hi=0.1)
+    trader_params_df.at[0, "step"] = 0.02  # TODO for debug
+    trader_params_df.at[0, "ratio"] = 0.01  # TODO for debug
 
     for i in tqdm(range(len(trader_params_df))):
         account = MarginAccountSimulator(initial_base_currency)
-        single_trader_params = trader_params_df.loc[i]
-
         account.update(0, interval[0])
+
+        single_trader_params = trader_params_df.loc[i]
         trader = LongShortTrader(
             acc=account, initial_price=interval[0], step=single_trader_params['step'],
             order_pair_size_ratio=single_trader_params['ratio'])
 
         for j, price in enumerate(interval[1:]):
-            assert price > 0
             account.update(j + 1, price)
             trader.update(j + 1, price)
 
         wallet = account.get_investment_value(interval[-1])
+        borrow = account.get_borrowed_value(interval[-1])
         trader_params_df.at[i, 'wallet'] = wallet
+        trader_params_df.at[i, 'borrow'] = borrow
         trader_params_df.at[i, 'n_trades'] = account.get_trade_count()
 
         if wallet > best_wallet:
             saved_trader = trader
             saved_account = account
             best_wallet = wallet
+            best_borrow = borrow
 
     print(saved_trader)
-    print(best_wallet)
+    print(f"best_wallet {best_wallet}")
+    print(f"best_borrow {best_borrow}")
 
     grid = saved_trader.grid_manager.get_grid_list()
     plot_results(saved_account, grid)
@@ -58,10 +71,13 @@ def plot_histograms(df, x, y, n_bins=10):
     fig = px.density_heatmap(df, x=x, y=y, nbinsx=n_bins, nbinsy=n_bins, text_auto=True)
     fig.show()
 
-    fig = px.density_heatmap(df, x=x, y=y, z="n_trades", histfunc="avg", nbinsx=n_bins, nbinsy=n_bins, text_auto=True)
+    fig = px.density_heatmap(df, x=x, y=y, z="wallet", histfunc="avg", nbinsx=n_bins, nbinsy=n_bins, text_auto=True)
     fig.show()
 
-    fig = px.density_heatmap(df, x=x, y=y, z="wallet", histfunc="avg", nbinsx=n_bins, nbinsy=n_bins, text_auto=True)
+    fig = px.density_heatmap(df, x=x, y=y, z="borrow", histfunc="avg", nbinsx=n_bins, nbinsy=n_bins, text_auto=True)
+    fig.show()
+
+    fig = px.density_heatmap(df, x=x, y=y, z="n_trades", histfunc="avg", nbinsx=n_bins, nbinsy=n_bins, text_auto=True)
     fig.show()
 
 

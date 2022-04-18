@@ -100,8 +100,14 @@ class MarginAccountSimulator:
         value -= self.borrowed_quote_currency * price
         return value
 
+    def get_borrowed_base_currency(self):
+        return self.borrowed_base_currency
+
+    def get_borrowed_quote_currency_value(self, price):
+        return self.borrowed_quote_currency * price
+
     def get_borrowed_value(self, price):
-        return self.borrowed_base_currency + self.borrowed_quote_currency * price
+        return self.get_borrowed_base_currency() + self.get_borrowed_quote_currency_value(price)
 
     def get_trade_count(self):
         return self.trade_count

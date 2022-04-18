@@ -1,6 +1,4 @@
-
 from binance import Client, ThreadedWebsocketManager, ThreadedDepthCacheManager
-
 
 """
 This module is a trial for:
@@ -19,8 +17,28 @@ https://www.binance.com/en/fee/marginFee
 """
 
 
-if __name__ == '__main__':
+def main():
+    """
+    Notes:
+    Main steps of the trader:
+    - Init
+    - Trade
 
+    Init:
+    - check connection
+    - check balance
+
+    Update:
+    - call
+
+
+
+
+    """
     api_key = "asd"
     api_secret = "asd"
     client = Client(api_key, api_secret)
+
+
+if __name__ == '__main__':
+    main()

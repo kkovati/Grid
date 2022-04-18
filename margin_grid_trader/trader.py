@@ -16,7 +16,6 @@ class GridManager:
         self.max_grid_idx = 0
 
     def get_price_at_idx(self, idx: int) -> float:
-        assert type(idx) is int
         self.min_grid_idx = min(idx, self.min_grid_idx)
         self.max_grid_idx = max(idx, self.max_grid_idx)
         if idx >= 0:
@@ -35,7 +34,6 @@ class GridManager:
 
 
 class OrderPair:
-
     def __init__(self, pos_type, time, price, value, open_grid_idx):
         assert pos_type in ('l', 's')
         self.pos_type = pos_type
@@ -70,30 +68,25 @@ class LongShortTrader:
 
     def __init__(self, acc: MarginAccountSimulator, initial_price, step, order_pair_size_ratio):
         logging.debug("-------------------------------")
-        logging.debug(f"MarginAccountSimulator step: {step} ratio: {order_pair_size_ratio}")
+        logging.debug(f"Init MarginAccountSimulator step: {step} ratio: {order_pair_size_ratio}")
+        logging.debug(f"step: {step} ratio: {order_pair_size_ratio}")
 
         self.acc = acc
-
         self.initial_price = initial_price
-
         self.step = step
+        self.grid_manager = GridManager(initial_price, step)
         self.order_pair_size_ratio = order_pair_size_ratio
         # value of a single long or short trade in base currency
         self.order_value = order_pair_size_ratio * acc.get_owned_base_currency()
+        logging.debug(f"order_value: {self.order_value}")
 
-        self.grid_manager = GridManager(initial_price, step)
-
-        # order pair is a buy-sell (long) or a sell-buy (short) order pair
+        # Order pair is a buy-sell (long) or a sell-buy (short) order pair
         # if it is in the list the first order is already done and second is not
         self.open_order_pairs = []
 
         # place initial order pairs
         op_long = OrderPair(pos_type='l', time=0, price=initial_price, value=self.order_value, open_grid_idx=0)
         op_short = OrderPair(pos_type='s', time=0, price=initial_price, value=self.order_value, open_grid_idx=0)
-        logging.debug("-------------------------------")
-        logging.debug("Initial orders:")
-        logging.debug(op_long)
-        logging.debug(op_short)
         self.acc.long_borrow_and_buy(value=op_long.value)
         self.acc.short_borrow_and_sell(amount=op_short.amount)
         self.open_order_pairs.append(op_long)
@@ -106,13 +99,23 @@ class LongShortTrader:
 
         self.grid_values_timeline = []
 
+        logging.debug("-------------------------------")
+        logging.debug("Initial orders:")
+        logging.debug(op_long)
+        logging.debug(op_short)
+        logging.debug(f"Trade count: {self.acc.get_trade_count()}")
+        logging.debug(f"Owned  base currency: {self.acc.get_owned_base_currency()}")
+        logging.debug(f"Borrowed total value: {self.acc.get_borrowed_value(initial_price)}")
+        logging.debug(f"Borrowed  base value: {self.acc.get_borrowed_base_currency()}")
+        logging.debug(f"Borrowed quote value: {self.acc.get_borrowed_quote_currency_value(initial_price)}")
+
     def __str__(self):
         return f"LongShortTrader step: {self.step:.4} ratio:{self.order_pair_size_ratio:.4}"
 
     @staticmethod
     def get_random_trader_population(n_traders, step_lo, step_hi, ratio_lo, ratio_hi):
         np.random.seed(0)
-        trader_params = pd.DataFrame(columns=('step', 'ratio', 'profit', 'n_trades'))
+        trader_params = pd.DataFrame(columns=('step', 'ratio', 'wallet', 'n_trades'))
         for i in range(n_traders):
             step = np.random.uniform(step_lo, step_hi)
             ratio = np.random.uniform(ratio_lo, ratio_hi)
@@ -120,6 +123,7 @@ class LongShortTrader:
                 'step': step,
                 'ratio': ratio,
                 'wallet': np.nan,
+                'borrow': np.nan,
                 'n_trades': np.nan
             }
             trader_params = trader_params.append(trader, ignore_index=True)
@@ -224,8 +228,11 @@ class LongShortTrader:
             else:
                 op_short_count += 1
         logging.debug(f"Open long/short order pair count: {op_long_count}/{op_short_count}")
-        logging.debug(f"Borrowed  base value: {self.acc.borrowed_base_currency * price}")
-        logging.debug(f"Borrowed quote value: {self.acc.borrowed_quote_currency}")
+        logging.debug(f"Trade count: {self.acc.get_trade_count()}")
+        logging.debug(f"Owned  base currency: {self.acc.get_owned_base_currency()}")
+        logging.debug(f"Borrowed total value: {self.acc.get_borrowed_value(price)}")
+        logging.debug(f"Borrowed  base value: {self.acc.get_borrowed_base_currency()}")
+        logging.debug(f"Borrowed quote value: {self.acc.get_borrowed_quote_currency_value(price)}")
 
     def update(self, time, price):
         """
